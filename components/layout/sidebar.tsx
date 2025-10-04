@@ -1,6 +1,6 @@
 "use client"
 
-import type React from "react"
+import React from "react"
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -25,12 +25,28 @@ const studentNavItems: NavItem[] = [
   { title: "Cài đặt", href: "/student/settings", icon: Settings },
 ]
 
-const teacherNavItems: NavItem[] = [
+// Role-specific menu items
+const roleMenuItems: Record<string, NavItem[]> = {
+  "Supervisor_lecturer": [
+    { title: "Gửi đề tài", href: "/teacher/topics/submit", icon: FileText },
+    { title: "Duyệt đề tài", href: "/teacher/topics/approve", icon: CheckCircle },
+    { title: "Chấm điểm", href: "/teacher/grading", icon: FileText },
+    { title: "Sinh viên hướng dẫn", href: "/teacher/students", icon: Users },
+  ],
+  "Department_Lecturer": [
+    { title: "Duyệt đề tài bộ môn", href: "/teacher/department/approve", icon: CheckCircle },
+  ],
+  "Reviewer_Lecturer": [
+    { title: "Chấm điểm phản biện", href: "/teacher/reviewer/grading", icon: FileText },
+  ],
+}
+
+// Common items for all teachers
+const commonTeacherItems: NavItem[] = [
   { title: "Tổng quan", href: "/teacher/dashboard", icon: LayoutDashboard },
-  { title: "Gửi đề tài", href: "/teacher/topics/submit", icon: FileText },
-  { title: "Duyệt đề tài", href: "/teacher/topics/approve", icon: CheckCircle },
-  { title: "Chấm điểm", href: "/teacher/grading", icon: FileText },
-  { title: "Sinh viên hướng dẫn", href: "/teacher/students", icon: Users },
+]
+
+const commonBottomItems: NavItem[] = [
   { title: "Hội đồng", href: "/teacher/councils", icon: Users },
   { title: "Cài đặt", href: "/teacher/settings", icon: Settings },
 ]
@@ -38,9 +54,40 @@ const teacherNavItems: NavItem[] = [
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { profile } = useAuth()
+  const { profile, userRoles } = useAuth()
+  console.log(userRoles)
+  // Merge navigation items based on all user roles
+  const navItems = React.useMemo(() => {
+    // If student or no roles, return student items
+    if (userRoles.length === 0 || profile?.role === "student") {
+      return studentNavItems
+    }
 
-  const navItems = profile?.role === "teacher" ? teacherNavItems : studentNavItems
+    // For teachers, merge all role-specific items
+    const mergedItems: NavItem[] = [...commonTeacherItems]
+    const addedHrefs = new Set<string>(mergedItems.map(item => item.href))
+
+    // Add items from each role
+    userRoles.forEach(role => {
+      const roleItems = roleMenuItems[role] || []
+      roleItems.forEach(item => {
+        if (!addedHrefs.has(item.href)) {
+          mergedItems.push(item)
+          addedHrefs.add(item.href)
+        }
+      })
+    })
+
+    // Add common bottom items
+    commonBottomItems.forEach(item => {
+      if (!addedHrefs.has(item.href)) {
+        mergedItems.push(item)
+        addedHrefs.add(item.href)
+      }
+    })
+
+    return mergedItems
+  }, [userRoles, profile?.role])
 
   async function handleSignOut() {
     await signOut()

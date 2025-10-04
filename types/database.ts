@@ -5,6 +5,11 @@ export enum RoleEnum {
   REVIEWER_LECTURER = "Reviewer_Lecturer",
 }
 
+export interface Grade_defences extends BaseEntity {
+  council?: number,
+  secretary?: number
+}
+
 export enum Gender {
   MALE = "male",
   FEMALE = "female",
@@ -121,6 +126,7 @@ export interface Enrollment extends BaseEntity {
   student_code: string
   midterm_code?: string
   final_code?: string
+  grade_code?: string
 }
 
 // Topics

@@ -36,7 +36,7 @@ interface TopicWithStudent extends Topic {
 }
 
 export default function ApproveTopicPage() {
-  const { profile } = useAuth();
+  const { profile, userRoles } = useAuth();
   const [topics, setTopics] = useState<TopicWithStudent[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTopic, setSelectedTopic] = useState<TopicWithStudent | null>(null);

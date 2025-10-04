@@ -13,6 +13,7 @@ interface AuthContextType {
   profile: UserProfile | null
   loading: boolean
   updateProfileSemester: (semester_code: string) => void
+  userRoles: string[]
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -20,12 +21,14 @@ const AuthContext = createContext<AuthContextType>({
   profile: null,
   loading: true,
   updateProfileSemester: () => {},
+  userRoles: [],
 })
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [userRoles, setUserRoles] = useState<string[]>([])
 
   useEffect(() => {
     const unsubscribe = onAuthChange(async (user) => {
@@ -38,8 +41,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           userProfile = await getUserProfile(user.uid, "student")
         }
         setProfile(userProfile)
+
+        // Fetch roles from rolesystems
+        if (userProfile) {
+          const rolesQuery = query(
+            collection(db, "rolesystems"),
+            where("teacher_code", "==", userProfile.id),
+            where("semester_code", "==", userProfile.semester_code),
+            where("activate", "==", true)
+          )
+          console.log(userProfile.id, userProfile.semester_code)
+          const rolesSnapshot = await getDocs(rolesQuery)
+          const roles = rolesSnapshot.docs.map(doc => doc.data().role)
+          console.log("cc", roles)
+          setUserRoles(roles)
+        }
       } else {
         setProfile(null)
+        setUserRoles([])
       }
 
       setLoading(false)
@@ -75,12 +94,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } as any
 
         setProfile(newProfile)
+
+        // Fetch roles for new semester
+        const rolesQuery = query(
+          collection(db, "rolesystems"),
+          where("teacher_code", "==", newProfile.id),
+          where("semester_code", "==", semester_code),
+          where("activate", "==", true)
+        )
+        const rolesSnapshot = await getDocs(rolesQuery)
+        const roles = rolesSnapshot.docs.map(doc => doc.data().role)
+        console.log("ccc", roles)
+        setUserRoles(roles)
       } else {
         // No profile found for this semester, keep current profile but update semester_code
         setProfile({
           ...profile,
           semester_code: semester_code,
         } as any)
+        setUserRoles([])
       }
     } catch (error) {
       console.error("Error fetching profile for semester:", error)
@@ -89,7 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  return <AuthContext.Provider value={{ user, profile, loading, updateProfileSemester }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ user, profile, loading, updateProfileSemester, userRoles }}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {

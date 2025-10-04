@@ -30,16 +30,17 @@ export async function signIn(email: string, password: string, role: UserRole) {
     // Verify user role from Firestore
     const userDoc = await getDoc(doc(db, role === "teacher" ? "teachers" : "students", user.uid))
 
+
     
 
     if (!userDoc.exists()) {
       await firebaseSignOut(auth)
       throw new Error(`Tài khoản không tồn tại trong hệ thống ${role === "teacher" ? "giáo viên" : "sinh viên"}`)
     }
-
+    console.log("cccc", user)
     return {
       user,
-      profile: { id: user.uid, ...userDoc.data() } as UserProfile,
+      profile: { id: user.uid, ...userDoc.data(), role: role } as UserProfile,
     }
   } catch (error: any) {
     throw new Error(error.message || "Đăng nhập thất bại")

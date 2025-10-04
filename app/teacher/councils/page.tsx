@@ -4,6 +4,8 @@ import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Calendar,
   Users,
@@ -12,26 +14,37 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
+  Search,
+  Award,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/contexts/auth-context";
 import { getDocuments, COLLECTIONS } from "@/lib/firebase/firestore";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
-import type { Council, Topic, Defence, Teacher } from "@/types/database";
+import type { Council, Topic, Defence, Teacher, Enrollment, Grade_defences } from "@/types/database";
 import { Alert } from "@/components/ui/alert";
 
 interface CouncilWithDetails extends Council {
   topic?: Topic | null;
   defences?: Array<Defence & { teacher?: Teacher | null }>;
+  enrollments?: Array<Enrollment & { student?: any; gradeDefence?: Grade_defences | null }>;
+  userPosition?: string;
 }
 
 export default function CouncilsPage() {
-  const { profile } = useAuth();
+  const { profile, userRoles } = useAuth();
   const [councils, setCouncils] = useState<CouncilWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCalendar, setShowCalendar] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedCouncil, setSelectedCouncil] = useState<CouncilWithDetails | null>(null);
+  const [gradingStudents, setGradingStudents] = useState<{[key: string]: number}>({});
+
+  // Filter states
+  const [searchInput, setSearchInput] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
 
   useEffect(() => {
     loadCouncils();
@@ -88,24 +101,75 @@ export default function CouncilsPage() {
         .filter((doc) => teacherIds.includes(doc.id))
         .map((doc) => ({ id: doc.id, ...doc.data() } as Teacher));
 
+      // Get enrollments for topics
+      const enrollmentsRef = collection(db, COLLECTIONS.ENROLLMENTS);
+      const enrollmentsSnapshot = await getDocs(enrollmentsRef);
+      const topicEnrollments = enrollmentsSnapshot.docs
+        .filter((doc) => {
+          const data = doc.data();
+          return topicIds.some(topicId => {
+            // Check if enrollment belongs to this topic
+            const topic = allTopics.find(t => t.id === topicId);
+            return topic?.enrollment_code === doc.id;
+          });
+        })
+        .map((doc) => ({ id: doc.id, ...doc.data() } as Enrollment));
+
+      // Get students
+      const studentIds = topicEnrollments.map(e => e.student_code).filter(Boolean);
+      const studentsRef = collection(db, COLLECTIONS.STUDENTS);
+      const studentsSnapshot = await getDocs(studentsRef);
+      const allStudents = studentsSnapshot.docs
+        .filter((doc) => studentIds.includes(doc.id))
+        .map((doc) => ({ id: doc.id, ...doc.data() }));
+
       // Map councils with details
-      const councilsWithDetails = allCouncils.map((council) => {
-        const topic =
-          allTopics.find((t) => t.id === council.topic_code) || null;
+      const councilsWithDetails = await Promise.all(allCouncils.map(async (council) => {
+        const topic = allTopics.find((t) => t.id === council.topic_code) || null;
         const councilDefences = allDefences
           .filter((d) => d.council_code === council.id)
           .map((defence) => ({
             ...defence,
-            teacher:
-              allTeachers.find((t) => t.id === defence.teacher_code) || null,
+            teacher: allTeachers.find((t) => t.id === defence.teacher_code) || null,
           }));
+
+        // Find user's position in this council
+        const userDefence = councilDefences.find(d => d.teacher_code === profile.id);
+        const userPosition = userDefence?.position || "";
+
+        // Get enrollments for this topic
+        const enrollments = topic ? topicEnrollments.filter(e => {
+          const enrollmentTopic = allTopics.find(t => t.enrollment_code === e.id);
+          return enrollmentTopic?.id === topic.id;
+        }) : [];
+
+        // Load grade_defences for each enrollment
+        const enrollmentsWithGrades = await Promise.all(enrollments.map(async (enrollment) => {
+          const student = allStudents.find(s => s.id === enrollment.student_code);
+          let gradeDefence = null;
+
+          if (enrollment.grade_code) {
+            const gradeDoc = await getDoc(doc(db, "grade_defences", enrollment.grade_code));
+            if (gradeDoc.exists()) {
+              gradeDefence = { id: gradeDoc.id, ...gradeDoc.data() } as Grade_defences;
+            }
+          }
+
+          return {
+            ...enrollment,
+            student,
+            gradeDefence
+          };
+        }));
 
         return {
           ...council,
           topic,
           defences: councilDefences,
+          userPosition,
+          enrollments: enrollmentsWithGrades,
         };
-      });
+      }));
 
       // Sort by date
       councilsWithDetails.sort((a, b) => {
@@ -250,6 +314,78 @@ export default function CouncilsPage() {
     );
   }
 
+  const handleSearch = () => {
+    setSearchTerm(searchInput);
+  };
+
+  const filteredCouncils = councils.filter(council => {
+    // Date filter
+    if (dateFilter && council.time_start) {
+      const councilDate = formatTimestamp(council.time_start).toISOString().split('T')[0];
+      if (councilDate !== dateFilter) return false;
+    }
+
+    // Search filter
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      const matchTitle = council.title?.toLowerCase().includes(term);
+      const matchStudent = council.enrollments?.some(e =>
+        e.student?.id?.toLowerCase().includes(term) ||
+        e.student?.username?.toLowerCase().includes(term)
+      );
+      if (!matchTitle && !matchStudent) return false;
+    }
+
+    return true;
+  });
+
+  const handleGradeSubmit = async (enrollmentId: string, gradeCode: string | undefined, studentCode: string) => {
+    const grade = gradingStudents[enrollmentId];
+    if (grade === undefined || grade < 0 || grade > 10) {
+      alert("Vui lòng nhập điểm hợp lệ (0-10)");
+      return;
+    }
+
+    try {
+      const gradeField = selectedCouncil?.userPosition === "chairman" || selectedCouncil?.userPosition === "president"
+        ? "council"
+        : "secretary";
+
+      if (gradeCode) {
+        // Update existing grade_defence
+        await updateDoc(doc(db, "grade_defences", gradeCode), {
+          [gradeField]: grade,
+          updated_at: new Date()
+        });
+      } else {
+        // Create new grade_defence
+        const newGradeRef = doc(collection(db, "grade_defences"));
+        await setDoc(newGradeRef, {
+          [gradeField]: grade,
+          created_at: new Date(),
+          updated_at: new Date(),
+          created_by: profile?.id,
+          updated_by: profile?.id
+        });
+
+        // Update enrollment with grade_code
+        await updateDoc(doc(db, COLLECTIONS.ENROLLMENTS, enrollmentId), {
+          grade_code: newGradeRef.id
+        });
+      }
+
+      alert(`Đã chấm điểm ${gradeField === "council" ? "chủ tịch" : "thư ký"} thành công`);
+
+      // Reload councils
+      loadCouncils();
+      setSelectedCouncil(null);
+      setGradingStudents({});
+    } catch (error) {
+      console.error("Error saving grade:", error);
+      alert("Có lỗi khi lưu điểm");
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="p-8">
@@ -268,6 +404,47 @@ export default function CouncilsPage() {
             {showCalendar ? "Xem danh sách" : "Xem lịch"}
           </Button>
         </div>
+
+        {!showCalendar && (
+          <Card className="p-4 mb-6">
+            <div className="grid md:grid-cols-3 gap-4">
+              <div>
+                <Label>Tìm kiếm (Title/MSSV)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Nhập từ khóa..."
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                  />
+                  <Button onClick={handleSearch} size="sm">
+                    <Search className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <div>
+                <Label>Lọc theo ngày</Label>
+                <Input
+                  type="date"
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                />
+              </div>
+              <div className="flex items-end">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSearchInput("");
+                    setSearchTerm("");
+                    setDateFilter("");
+                  }}
+                >
+                  Xóa bộ lọc
+                </Button>
+              </div>
+            </div>
+          </Card>
+        )}
 
         {showCalendar ? (
           /* Calendar View */
@@ -308,14 +485,14 @@ export default function CouncilsPage() {
         ) : (
           /* List View */
           <>
-            {councils.length === 0 ? (
+            {filteredCouncils.length === 0 ? (
               <Alert className="bg-blue-50 text-blue-900 border-blue-200">
                 <Users className="h-4 w-4" />
-                <p>Chưa có hội đồng nào</p>
+                <p>{councils.length === 0 ? "Chưa có hội đồng nào" : "Không tìm thấy hội đồng phù hợp"}</p>
               </Alert>
             ) : (
               <div className="grid gap-6">
-                {councils.map((council) => (
+                {filteredCouncils.map((council) => (
                   <Card key={council.id} className="p-6">
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex-1">
@@ -410,6 +587,77 @@ export default function CouncilsPage() {
                                 </div>
                               ))}
                             </div>
+                          </div>
+                        )}
+
+                        {/* Grading Section - Only for Chairman/Secretary */}
+                        {(council.userPosition === "chairman" || council.userPosition === "president" || council.userPosition === "secretary") && council.enrollments && council.enrollments.length > 0 && (
+                          <div className="mt-4 border-t pt-4">
+                            <div className="flex items-center justify-between mb-4">
+                              <h4 className="font-medium flex items-center gap-2">
+                                <Award className="h-4 w-4" />
+                                Chấm điểm {council.userPosition === "chairman" || council.userPosition === "president" ? "chủ tịch" : "thư ký"}
+                              </h4>
+                              {selectedCouncil?.id !== council.id && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => setSelectedCouncil(council)}
+                                >
+                                  Chấm điểm
+                                </Button>
+                              )}
+                            </div>
+
+                            {selectedCouncil?.id === council.id && (
+                              <div className="space-y-3">
+                                {council.enrollments.map((enrollment) => {
+                                  const gradeField = council.userPosition === "chairman" || council.userPosition === "president" ? "council" : "secretary";
+                                  const currentGrade = enrollment.gradeDefence?.[gradeField as keyof Grade_defences];
+
+                                  return (
+                                    <div key={enrollment.id} className="p-3 bg-muted/50 rounded space-y-2">
+                                      <div className="flex items-center justify-between">
+                                        <div>
+                                          <p className="font-medium">{enrollment.student?.id} - {enrollment.student?.username}</p>
+                                          {currentGrade !== null && currentGrade !== undefined && typeof currentGrade === 'number' && (
+                                            <p className="text-sm text-muted-foreground">Điểm hiện tại: {currentGrade}/10</p>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <Input
+                                          type="number"
+                                          min="0"
+                                          max="10"
+                                          step="0.1"
+                                          placeholder="Nhập điểm (0-10)"
+                                          value={gradingStudents[enrollment.id] || ""}
+                                          onChange={(e) => setGradingStudents({
+                                            ...gradingStudents,
+                                            [enrollment.id]: parseFloat(e.target.value)
+                                          })}
+                                        />
+                                        <Button
+                                          size="sm"
+                                          onClick={() => handleGradeSubmit(enrollment.id, enrollment.grade_code, enrollment.student_code)}
+                                        >
+                                          Lưu
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                                <Button
+                                  variant="outline"
+                                  onClick={() => {
+                                    setSelectedCouncil(null);
+                                    setGradingStudents({});
+                                  }}
+                                >
+                                  Đóng
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
