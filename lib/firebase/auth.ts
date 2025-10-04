@@ -17,8 +17,8 @@ export interface UserProfile {
   role: UserRole
   username: string
   gender: string
-  major_code: number
-  semester_code: number
+  major_code: string
+  semester_code: string
   classCode: number
 }
 

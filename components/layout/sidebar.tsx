@@ -35,9 +35,13 @@ const roleMenuItems: Record<string, NavItem[]> = {
   ],
   "Department_Lecturer": [
     { title: "Duyệt đề tài bộ môn", href: "/teacher/department/approve", icon: CheckCircle },
+    { title: "Tạo hội đồng", href: "/teacher/councils/create", icon: Users },
   ],
   "Reviewer_Lecturer": [
     { title: "Chấm điểm phản biện", href: "/teacher/reviewer/grading", icon: FileText },
+  ],
+  "Academic_affairs_staff": [
+    { title: "Tạo hội đồng", href: "/teacher/councils/create", icon: Users },
   ],
 }
 
