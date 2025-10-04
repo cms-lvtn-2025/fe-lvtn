@@ -17,8 +17,8 @@ export interface UserProfile {
   role: UserRole
   username: string
   gender: string
-  majorCode: number
-  semesterCode: number
+  major_code: number
+  semester_code: number
   classCode: number
 }
 
@@ -84,13 +84,13 @@ export async function getUserProfile(userId: string, role: UserRole): Promise<Us
 }
 
 // Check if user has access to a specific semester
-export async function checkUserSemesterAccess(userId: string, role: UserRole, semesterCode: string): Promise<boolean> {
+export async function checkUserSemesterAccess(userId: string, role: UserRole, semester_code: string): Promise<boolean> {
   try {
     const collectionName = role === "teacher" ? "teachers" : "students"
     const q = query(
       collection(db, collectionName),
       where("__name__", "==", userId),
-      where("semester_code", "==", semesterCode)
+      where("semester_code", "==", semester_code)
     )
     const snapshot = await getDocs(q)
     return !snapshot.empty

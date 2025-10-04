@@ -97,7 +97,7 @@ export function SemesterProvider({ children }: { children: React.ReactNode }) {
           (s) => s.id === savedSemesterId
         );
         const profileSemester = allSemesters.find(
-          (s) => s.id === profile?.semesterCode?.toString()
+          (s) => s.id === profile?.semester_code?.toString()
         );
 
         if (savedSemester) {

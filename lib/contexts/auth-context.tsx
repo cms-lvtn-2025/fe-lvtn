@@ -12,7 +12,7 @@ interface AuthContextType {
   user: User | null
   profile: UserProfile | null
   loading: boolean
-  updateProfileSemester: (semesterCode: string) => void
+  updateProfileSemester: (semester_code: string) => void
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe()
   }, [])
 
-  const updateProfileSemester = async (semesterCode: string) => {
+  const updateProfileSemester = async (semester_code: string) => {
     if (!profile || !user) return
 
     setLoading(true)
@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const q = query(
         collectionRef,
         where("email", "==", profile.email),
-        where("semester_code", "==", semesterCode)
+        where("semester_code", "==", semester_code)
       )
 
       const snapshot = await getDocs(q)
@@ -79,8 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // No profile found for this semester, keep current profile but update semester_code
         setProfile({
           ...profile,
-          semester_code: semesterCode,
-          semesterCode: semesterCode as any
+          semester_code: semester_code,
         } as any)
       }
     } catch (error) {

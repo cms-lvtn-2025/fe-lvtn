@@ -4,7 +4,7 @@ import type React from "react"
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { GraduationCap, LayoutDashboard, FileText, Users, Calendar, Settings, LogOut } from "lucide-react"
+import { GraduationCap, LayoutDashboard, FileText, Users, Calendar, Settings, LogOut, CheckCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/lib/contexts/auth-context"
@@ -27,8 +27,10 @@ const studentNavItems: NavItem[] = [
 
 const teacherNavItems: NavItem[] = [
   { title: "Tổng quan", href: "/teacher/dashboard", icon: LayoutDashboard },
+  { title: "Gửi đề tài", href: "/teacher/topics/submit", icon: FileText },
+  { title: "Duyệt đề tài", href: "/teacher/topics/approve", icon: CheckCircle },
+  { title: "Chấm điểm", href: "/teacher/grading", icon: FileText },
   { title: "Sinh viên hướng dẫn", href: "/teacher/students", icon: Users },
-  { title: "Luận văn", href: "/teacher/thesis", icon: FileText },
   { title: "Hội đồng", href: "/teacher/councils", icon: Users },
   { title: "Cài đặt", href: "/teacher/settings", icon: Settings },
 ]

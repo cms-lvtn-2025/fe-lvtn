@@ -178,8 +178,8 @@ export const studentService = {
   },
   getByMajor: (majorCode: string) =>
     getDocuments<Student>(COLLECTIONS.STUDENTS, [where("major_code", "==", majorCode)]),
-  getBySemester: (semesterCode: string) =>
-    getDocuments<Student>(COLLECTIONS.STUDENTS, [where("semester_code", "==", semesterCode)]),
+  getBySemester: (semester_code: string) =>
+    getDocuments<Student>(COLLECTIONS.STUDENTS, [where("semester_code", "==", semester_code)]),
   create: (data: CreateStudentInput, userId?: string) => createDocument(COLLECTIONS.STUDENTS, data, userId),
   update: (id: string, data: UpdateStudentInput, userId?: string) =>
     updateDocument(COLLECTIONS.STUDENTS, id, data, userId),
@@ -196,8 +196,8 @@ export const teacherService = {
   },
   getByMajor: (majorCode: string) =>
     getDocuments<Teacher>(COLLECTIONS.TEACHERS, [where("major_code", "==", majorCode)]),
-  getBySemester: (semesterCode: string) =>
-    getDocuments<Teacher>(COLLECTIONS.TEACHERS, [where("semester_code", "==", semesterCode)]),
+  getBySemester: (semester_code: string) =>
+    getDocuments<Teacher>(COLLECTIONS.TEACHERS, [where("semester_code", "==", semester_code)]),
   create: (data: CreateTeacherInput, userId?: string) => createDocument(COLLECTIONS.TEACHERS, data, userId),
   update: (id: string, data: UpdateTeacherInput, userId?: string) =>
     updateDocument(COLLECTIONS.TEACHERS, id, data, userId),
@@ -231,8 +231,8 @@ export const roleSystemService = {
   getById: (id: string) => getDocument<RoleSystem>(COLLECTIONS.ROLE_SYSTEMS, id),
   getByTeacher: (teacherCode: string) =>
     getDocuments<RoleSystem>(COLLECTIONS.ROLE_SYSTEMS, [where("teacher_code", "==", teacherCode)]),
-  getBySemester: (semesterCode: string) =>
-    getDocuments<RoleSystem>(COLLECTIONS.ROLE_SYSTEMS, [where("semester_code", "==", semesterCode)]),
+  getBySemester: (semester_code: string) =>
+    getDocuments<RoleSystem>(COLLECTIONS.ROLE_SYSTEMS, [where("semester_code", "==", semester_code)]),
   getActiveByTeacher: (teacherCode: string) =>
     getDocuments<RoleSystem>(COLLECTIONS.ROLE_SYSTEMS, [
       where("teacher_code", "==", teacherCode),
@@ -282,8 +282,8 @@ export const topicService = {
   getAll: () => getDocuments<Topic>(COLLECTIONS.TOPICS),
   getById: (id: string) => getDocument<Topic>(COLLECTIONS.TOPICS, id),
   getByMajor: (majorCode: string) => getDocuments<Topic>(COLLECTIONS.TOPICS, [where("major_code", "==", majorCode)]),
-  getBySemester: (semesterCode: string) =>
-    getDocuments<Topic>(COLLECTIONS.TOPICS, [where("semester_code", "==", semesterCode)]),
+  getBySemester: (semester_code: string) =>
+    getDocuments<Topic>(COLLECTIONS.TOPICS, [where("semester_code", "==", semester_code)]),
   getBySupervisor: (teacherCode: string) =>
     getDocuments<Topic>(COLLECTIONS.TOPICS, [where("teacher_supervisor_code", "==", teacherCode)]),
   getByStatus: (status: string) => getDocuments<Topic>(COLLECTIONS.TOPICS, [where("status", "==", status)]),

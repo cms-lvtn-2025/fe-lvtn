@@ -42,6 +42,7 @@ export enum FinalStatus {
   PENDING = "pending",
   PASSED = "passed",
   FAILED = "failed",
+  COMPLETED = "completed"
 }
 
 // Base interface for common fields
