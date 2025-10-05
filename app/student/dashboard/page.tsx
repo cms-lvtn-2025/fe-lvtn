@@ -32,7 +32,7 @@ export default function StudentDashboardPage() {
   const { profile } = useAuth()
   const { currentSemester } = useSemester()
   const { topics, isLoading } = useTopicDetails(profile?.id, currentSemester?.id)
-
+  
   if (isLoading) {
     return (
       <DashboardLayout>

@@ -11,6 +11,19 @@ import { useTopicDetails } from "@/lib/hooks/use-topic-details"
 import { format } from "date-fns"
 import { vi } from "date-fns/locale"
 
+// Helper function to convert Firestore timestamp to Date
+const toDate = (timestamp: any): Date | null => {
+  if (!timestamp) return null
+  if (timestamp instanceof Date) return timestamp
+  if (timestamp.toDate) return timestamp.toDate()
+  if (timestamp.seconds) return new Date(timestamp.seconds * 1000)
+  try {
+    return new Date(timestamp)
+  } catch {
+    return null
+  }
+}
+
 export default function StudentSchedulePage() {
   const { profile } = useAuth()
   const { currentSemester } = useSemester()
@@ -52,8 +65,8 @@ export default function StudentSchedulePage() {
               const { council_info } = topic
               if (!council_info) return null
 
-              const timeStart = council_info.time_start ? new Date(council_info.time_start) : null
-              const timeEnd = council_info.time_end ? new Date(council_info.time_end) : null
+              const timeStart = toDate(council_info.time_start)
+              const timeEnd = toDate(council_info.time_end)
 
               return (
                 <Card key={topic.id} className="border-l-4 border-l-primary">

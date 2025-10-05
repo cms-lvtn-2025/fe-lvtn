@@ -8,6 +8,19 @@ import { format } from "date-fns"
 import { vi } from "date-fns/locale"
 import Link from "next/link"
 
+// Helper function to convert Firestore timestamp to Date
+const toDate = (timestamp: any): Date | null => {
+  if (!timestamp) return null
+  if (timestamp instanceof Date) return timestamp
+  if (timestamp.toDate) return timestamp.toDate()
+  if (timestamp.seconds) return new Date(timestamp.seconds * 1000)
+  try {
+    return new Date(timestamp)
+  } catch {
+    return null
+  }
+}
+
 interface CouncilMember {
   id: string
   name: string
@@ -63,41 +76,38 @@ export function UpcomingDefenseCard({ upcomingDefense }: UpcomingDefenseCardProp
                       {upcomingDefense.council_info.title}
                     </span>
                   </motion.div>
-                  {upcomingDefense.council_info.time_start && (
-                    <>
-                      <motion.div
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.4 }}
-                        className="flex items-center gap-2 text-sm"
-                      >
-                        <Calendar className="h-4 w-4 text-primary" />
-                        <span className="font-medium">
-                          {format(
-                            new Date(upcomingDefense.council_info.time_start),
-                            "EEEE, dd/MM/yyyy",
-                            { locale: vi }
-                          )}
-                        </span>
-                      </motion.div>
-                      <motion.div
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.5 }}
-                        className="flex items-center gap-2 text-sm"
-                      >
-                        <Clock className="h-4 w-4 text-primary" />
-                        <span className="font-medium">
-                          {format(new Date(upcomingDefense.council_info.time_start), "HH:mm")}
-                          {upcomingDefense.council_info.time_end &&
-                            ` - ${format(
-                              new Date(upcomingDefense.council_info.time_end),
-                              "HH:mm"
-                            )}`}
-                        </span>
-                      </motion.div>
-                    </>
-                  )}
+                  {(() => {
+                    const startDate = toDate(upcomingDefense.council_info.time_start)
+                    const endDate = toDate(upcomingDefense.council_info.time_end)
+
+                    return startDate ? (
+                      <>
+                        <motion.div
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: 0.4 }}
+                          className="flex items-center gap-2 text-sm"
+                        >
+                          <Calendar className="h-4 w-4 text-primary" />
+                          <span className="font-medium">
+                            {format(startDate, "EEEE, dd/MM/yyyy", { locale: vi })}
+                          </span>
+                        </motion.div>
+                        <motion.div
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: 0.5 }}
+                          className="flex items-center gap-2 text-sm"
+                        >
+                          <Clock className="h-4 w-4 text-primary" />
+                          <span className="font-medium">
+                            {format(startDate, "HH:mm")}
+                            {endDate && ` - ${format(endDate, "HH:mm")}`}
+                          </span>
+                        </motion.div>
+                      </>
+                    ) : null
+                  })()}
                 </div>
               </motion.div>
 
