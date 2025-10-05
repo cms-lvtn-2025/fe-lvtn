@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import { useSemester } from "@/lib/contexts/semester-context"
-import { Button } from "@/components/ui/button"
+import { useSemester } from "@/lib/contexts/semester-context";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,23 +9,29 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Calendar, Check } from "lucide-react"
+} from "@/components/ui/dropdown-menu";
+import { Calendar, Check } from "lucide-react";
 
 export function SemesterSelector() {
-  const { semesters, currentSemester, setCurrentSemester, isLoading } = useSemester()
-  console.log("cc", currentSemester)
+  const { semesters, currentSemester, setCurrentSemester, isLoading } =
+    useSemester();
+  let semester = localStorage.getItem("currentSemesterId");
+  if (!semester) {
+    semester = "sem-2024-2";
+    localStorage.setItem("currentSemesterId", "sem-2024-2");
+  }
+  console.log("cc", currentSemester);
   if (isLoading) {
     return (
       <Button variant="outline" size="sm" disabled>
         <Calendar className="mr-2 h-4 w-4" />
         Đang tải...
       </Button>
-    )
+    );
   }
 
   if (semesters.length === 0) {
-    return null
+    return null;
   }
 
   return (
@@ -47,11 +53,13 @@ export function SemesterSelector() {
           >
             <div className="flex items-center justify-between w-full">
               <span>{semester.title}</span>
-              {currentSemester?.id === semester.id && <Check className="h-4 w-4" />}
+              {currentSemester?.id === semester.id && (
+                <Check className="h-4 w-4" />
+              )}
             </div>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }

@@ -101,11 +101,14 @@ export function SemesterProvider({ children }: { children: React.ReactNode }) {
         );
 
         if (savedSemester) {
+          console.log(0)
           setCurrentSemester(savedSemester);
         } else if (profileSemester) {
+          console.log(1)
           setCurrentSemester(profileSemester);
           localStorage.setItem("currentSemesterId", profileSemester.id);
         } else if (allSemesters.length > 0) {
+          console.log(2)
           setCurrentSemester(allSemesters[0]);
           localStorage.setItem("currentSemesterId", allSemesters[0].id);
         }

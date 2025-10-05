@@ -34,8 +34,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onAuthChange(async (user) => {
       setUser(user)
       console.log(user)
-      const semester = localStorage.getItem("currentSemesterId")
-      if (user && user.email && semester) {
+      let semester = localStorage.getItem("currentSemesterId")
+      if (!semester) {
+        semester = "sem-2024-2"
+        localStorage.setItem("currentSemesterId", "sem-2024-2")
+      }
+      if (user && user.email) {
         // Try to get profile from both collections
         let userProfile = await getUserProfileByEmailAndSemester(user.email, semester, "teacher")
         if (!userProfile) {
