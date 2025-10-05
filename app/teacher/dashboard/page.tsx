@@ -85,34 +85,57 @@ export default function TeacherDashboardPage() {
       const pendingMidterm = topics.length - gradedMidterms
       const pendingFinal = topics.length - gradedFinals
 
-      // Get councils
+      // Get councils with schedules
       const defencesRef = collection(db, COLLECTIONS.DEFENCES)
       const defencesQuery = query(defencesRef, where("teacher_code", "==", profile.id))
       const defencesSnapshot = await getDocs(defencesQuery)
-      const councilIds = [...new Set(defencesSnapshot.docs.map(doc => doc.data().council_code))]
+      const councilIds = Array.from(new Set(defencesSnapshot.docs.map(doc => doc.data().council_code)))
 
+      // Get councils_schedule to find upcoming councils
+      const schedulesRef = collection(db, COLLECTIONS.COUNCILS_SCHEDULE)
+      const schedulesSnapshot = await getDocs(schedulesRef)
+      const allSchedules = schedulesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any))
+
+      // Filter schedules for councils the teacher is in
+      const relevantSchedules = allSchedules.filter((s: any) => councilIds.includes(s.councils_code))
+
+      // Filter upcoming schedules
+      const now = new Date()
+      const upcomingSchedules = relevantSchedules.filter((s: any) => {
+        if (!s.time_start) return false
+        const startDate = s.time_start instanceof Date ? s.time_start : new Date((s.time_start as any).seconds * 1000)
+        return startDate > now
+      })
+
+      // Sort by time_start
+      upcomingSchedules.sort((a: any, b: any) => {
+        const aDate = a.time_start instanceof Date ? a.time_start : new Date((a.time_start as any).seconds * 1000)
+        const bDate = b.time_start instanceof Date ? b.time_start : new Date((b.time_start as any).seconds * 1000)
+        return aDate.getTime() - bDate.getTime()
+      })
+
+      // Get unique councils from upcoming schedules with their earliest schedule
+      const councilScheduleMap = new Map()
+      upcomingSchedules.forEach((schedule: any) => {
+        if (!councilScheduleMap.has(schedule.councils_code) ||
+            (schedule.time_start && councilScheduleMap.get(schedule.councils_code).time_start > schedule.time_start)) {
+          councilScheduleMap.set(schedule.councils_code, schedule)
+        }
+      })
+
+      const upcomingCouncilIds = Array.from(councilScheduleMap.keys()).slice(0, 3)
       const councilsRef = collection(db, COLLECTIONS.COUNCILS)
       const councilsSnapshot = await getDocs(councilsRef)
-      const allCouncils = councilsSnapshot.docs
-        .filter(doc => councilIds.includes(doc.id))
-        .map(doc => ({ id: doc.id, ...doc.data() } as Council))
-
-      // Filter upcoming councils (future dates)
-      const now = new Date()
-      const upcoming = allCouncils.filter(c => {
-        if (!c.time_start) return false
-        const councilDate = typeof c.time_start === 'number'
-          ? new Date(c.time_start * 1000)
-          : new Date(c.time_start)
-        return councilDate > now
-      })
-
-      // Sort upcoming councils by date
-      upcoming.sort((a, b) => {
-        const aDate = a.time_start ? (typeof a.time_start === 'number' ? a.time_start * 1000 : new Date(a.time_start).getTime()) : 0
-        const bDate = b.time_start ? (typeof b.time_start === 'number' ? b.time_start * 1000 : new Date(b.time_start).getTime()) : 0
-        return aDate - bDate
-      })
+      const upcoming = councilsSnapshot.docs
+        .filter(doc => upcomingCouncilIds.includes(doc.id))
+        .map(doc => {
+          const schedule = councilScheduleMap.get(doc.id)
+          return {
+            id: doc.id,
+            ...doc.data(),
+            earliestSchedule: schedule
+          } as Council & { earliestSchedule: any }
+        })
 
       // Get recent topics (last 5)
       const sortedTopics = [...topics].sort((a, b) => {
@@ -270,15 +293,25 @@ export default function TeacherDashboardPage() {
               <p className="text-sm text-muted-foreground">Chưa có hội đồng nào</p>
             ) : (
               <div className="space-y-3">
-                {upcomingCouncils.map(council => (
-                  <div key={council.id} className="flex items-start gap-3 p-3 rounded-lg bg-secondary/50">
-                    <Calendar className="w-5 h-5 text-primary mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{council.title}</p>
-                      <p className="text-sm text-muted-foreground">{formatDateTime(council.time_start)}</p>
+                {upcomingCouncils.map(council => {
+                  const schedule = (council as any).earliestSchedule
+                  const timeStart = schedule?.time_start instanceof Date
+                    ? schedule.time_start
+                    : schedule?.time_start
+                      ? new Date((schedule.time_start as any).seconds * 1000)
+                      : null
+                  return (
+                    <div key={council.id} className="flex items-start gap-3 p-3 rounded-lg bg-secondary/50">
+                      <Calendar className="w-5 h-5 text-primary mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{council.title}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {timeStart ? formatDateTime(timeStart) : 'Chưa có lịch'}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </Card>

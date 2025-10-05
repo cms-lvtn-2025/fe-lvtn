@@ -225,9 +225,19 @@ export default function SubmitTopicPage() {
 
             {/* File Upload */}
             <div>
-              <Label>
-                File đề cương <span className="text-red-500">*</span>
-              </Label>
+              <div className="flex items-center justify-between mb-2">
+                <Label>
+                  File đề cương (Phiếu nhiệm vụ) <span className="text-red-500">*</span>
+                </Label>
+                <a
+                  href="/template/0.1. Phieunhiemvu_mauTruong-CS-CE.docx"
+                  download
+                  className="text-sm text-primary hover:underline flex items-center gap-1"
+                >
+                  <FileText className="w-4 h-4" />
+                  Tải template mẫu
+                </a>
+              </div>
               <div className="mt-2">
                 {!uploadedFile ? (
                   <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-border rounded-lg cursor-pointer hover:bg-secondary/50 transition-colors">

@@ -7,7 +7,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyDqdenwOQWuIHkehz_Ua8_mHk1lkEKvVww",
   authDomain: "education-99cbf.firebaseapp.com",
   projectId: "education-99cbf",
-  storageBucket: "education-99cbf.firebasestorage.app",
+  storageBucket: "education-99cbf.appspot.com",
   messagingSenderId: "277079491748",
   appId: "1:277079491748:web:540c5488c3393b722b5231",
   measurementId: "G-F5SMLFS9TS",
