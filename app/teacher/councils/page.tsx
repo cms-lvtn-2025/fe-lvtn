@@ -21,15 +21,7 @@ export default function CouncilsPage() {
     setSelectedCouncil,
     gradingStudents,
     setGradingStudents,
-    showAssignTopic,
-    setShowAssignTopic,
-    availableTopics,
-    assignLoading,
-    canAssignTopic,
-    canGrade,
     formatTimestamp,
-    handleShowAssignTopic,
-    handleAssignTopic,
     handleGradeSubmit,
   } = useCouncils({ profile, userRoles });
 
@@ -60,9 +52,14 @@ export default function CouncilsPage() {
   };
 
   const filteredCouncils = councils.filter(council => {
-    if (dateFilter && council.time_start) {
-      const councilDate = formatTimestamp(council.time_start).toISOString().split('T')[0];
-      if (councilDate !== dateFilter) return false;
+    if (dateFilter) {
+      // Check if any topic schedule matches the date filter
+      const hasMatchingDate = council.topics?.some(topic => {
+        if (!topic.schedule?.time_start) return false;
+        const scheduleDate = formatTimestamp(topic.schedule.time_start).toISOString().split('T')[0];
+        return scheduleDate === dateFilter;
+      });
+      if (!hasMatchingDate) return false;
     }
 
     if (searchTerm) {
@@ -129,20 +126,12 @@ export default function CouncilsPage() {
                     key={council.id}
                     council={council}
                     profile={profile}
-                    canAssignTopic={canAssignTopic}
-                    canGrade={canGrade}
                     selectedCouncil={selectedCouncil}
                     setSelectedCouncil={setSelectedCouncil}
                     gradingStudents={gradingStudents}
                     setGradingStudents={setGradingStudents}
-                    showAssignTopic={showAssignTopic}
-                    availableTopics={availableTopics}
-                    assignLoading={assignLoading}
                     formatTimestamp={formatTimestamp}
-                    handleShowAssignTopic={handleShowAssignTopic}
-                    handleAssignTopic={handleAssignTopic}
                     handleGradeSubmit={handleGradeSubmit}
-                    setShowAssignTopic={setShowAssignTopic}
                     getPositionLabel={getPositionLabel}
                     getPositionColor={getPositionColor}
                   />

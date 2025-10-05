@@ -70,6 +70,7 @@ export const COLLECTIONS = {
   ENROLLMENTS: "enrollments",
   TOPICS: "topics",
   COUNCILS: "councils",
+  COUNCILS_SCHEDULE: "councils_schedule",
   DEFENCES: "defences",
   FINALS: "finals",
 } as const
@@ -298,8 +299,6 @@ export const councilService = {
   getById: (id: string) => getDocument<Council>(COLLECTIONS.COUNCILS, id),
   getByMajor: (majorCode: string) =>
     getDocuments<Council>(COLLECTIONS.COUNCILS, [where("major_code", "==", majorCode)]),
-  getByTopic: (topicCode: string) =>
-    getDocuments<Council>(COLLECTIONS.COUNCILS, [where("topic_code", "==", topicCode)]),
   create: (data: CreateCouncilInput, userId?: string) => createDocument(COLLECTIONS.COUNCILS, data, userId),
   update: (id: string, data: UpdateCouncilInput, userId?: string) =>
     updateDocument(COLLECTIONS.COUNCILS, id, data, userId),

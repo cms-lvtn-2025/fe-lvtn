@@ -197,45 +197,55 @@ export function useTopicDetails(studentId: string | undefined, currentSemesterId
               defenseGrade = final.defense_grade
 
               try {
-                const councils = await councilService.getByTopic(studentTopic.id)
-                if (councils.length > 0) {
-                  const council = councils[0]
+                // Get councils_schedule for this topic
+                const schedulesRef = collection(db, "councils_schedule")
+                const schedulesQuery = query(schedulesRef, where("topic_code", "==", studentTopic.id))
+                const schedulesSnapshot = await getDocs(schedulesQuery)
 
-                  // Fetch defence members (thành viên hội đồng)
-                  const councilMembers: CouncilMember[] = []
-                  try {
-                    const defences = await defenceService.getByCouncil(council.id)
+                if (!schedulesSnapshot.empty) {
+                  const schedule = schedulesSnapshot.docs[0].data()
+                  const councilId = schedule.councils_code
 
-                    // Position labels
-                    const positionLabels: Record<string, string> = {
-                      president: "Chủ tịch",
-                      secretary: "Thư ký",
-                      reviewer: "Phản biện",
-                      member: "Ủy viên",
-                      chairman: "Chủ tịch",
-                    }
+                  if (councilId) {
+                    const council = await councilService.getById(councilId)
+                    if (council) {
+                      // Fetch defence members (thành viên hội đồng)
+                      const councilMembers: CouncilMember[] = []
+                      try {
+                        const defences = await defenceService.getByCouncil(council.id)
 
-                    for (const defence of defences) {
-                      const teacher = await teacherService.getById(defence.teacher_code)
-                      if (teacher) {
-                        councilMembers.push({
-                          id: defence.id,
-                          name: teacher.username,
-                          position: defence.position,
-                          position_title: positionLabels[defence.position] || defence.title,
-                        })
+                        // Position labels
+                        const positionLabels: Record<string, string> = {
+                          president: "Chủ tịch",
+                          secretary: "Thư ký",
+                          reviewer: "Phản biện",
+                          member: "Ủy viên",
+                          chairman: "Chủ tịch",
+                        }
+
+                        for (const defence of defences) {
+                          const teacher = await teacherService.getById(defence.teacher_code)
+                          if (teacher) {
+                            councilMembers.push({
+                              id: defence.id,
+                              name: teacher.username,
+                              position: defence.position,
+                              position_title: positionLabels[defence.position] || defence.title,
+                            })
+                          }
+                        }
+                      } catch (err) {
+                        console.error("Error fetching defence members:", err)
+                      }
+
+                      councilInfo = {
+                        title: council.title,
+                        time_start: schedule.time_start,
+                        time_end: schedule.time_end,
+                        council_id: council.id,
+                        members: councilMembers,
                       }
                     }
-                  } catch (err) {
-                    console.error("Error fetching defence members:", err)
-                  }
-
-                  councilInfo = {
-                    title: council.title,
-                    time_start: council.time_start,
-                    time_end: council.time_end,
-                    council_id: council.id,
-                    members: councilMembers,
                   }
                 }
               } catch (err) {

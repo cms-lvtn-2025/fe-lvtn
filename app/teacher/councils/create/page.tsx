@@ -164,9 +164,6 @@ export default function CreateCouncilPage() {
       const councilData = {
         title: councilTitle,
         major_code: majorCode,
-        topic_code: null, // Will be assigned later
-        time_start: null,
-        time_end: null,
         semester_code: profile?.semester_code,
         created_at: new Date(),
         updated_at: new Date(),

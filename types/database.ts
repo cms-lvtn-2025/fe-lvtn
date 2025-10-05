@@ -10,6 +10,13 @@ export interface Grade_defences extends BaseEntity {
   secretary?: number
 }
 
+export interface councils_schedule extends BaseEntity {
+  councils_code?: string,
+  topic_code?: string,
+  time_start?: Date
+  time_end?: Date
+}
+
 export enum Gender {
   MALE = "male",
   FEMALE = "female",
@@ -145,10 +152,8 @@ export interface Topic extends BaseEntity {
 // Councils
 export interface Council extends BaseEntity {
   title: string
-  major_code: string
-  topic_code: string
-  time_start?: Date
-  time_end?: Date
+  major_code: string,
+  semester_code: string,
 }
 
 // Defences

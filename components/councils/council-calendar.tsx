@@ -8,6 +8,8 @@ interface CouncilCalendarProps {
   currentDate: Date;
   setCurrentDate: (date: Date) => void;
   formatTimestamp: (timestamp: any) => Date;
+  canCreateSchedule?: boolean;
+  onCreateSchedule?: () => void;
 }
 
 export function CouncilCalendar({
@@ -15,6 +17,8 @@ export function CouncilCalendar({
   currentDate,
   setCurrentDate,
   formatTimestamp,
+  canCreateSchedule,
+  onCreateSchedule,
 }: CouncilCalendarProps) {
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
@@ -29,9 +33,12 @@ export function CouncilCalendar({
 
   const getCouncilsForDate = (date: Date) => {
     return councils.filter((council) => {
-      if (!council.time_start) return false;
-      const councilDate = formatTimestamp(council.time_start);
-      return councilDate.toDateString() === date.toDateString();
+      // Check if any topic in this council has a schedule for this date
+      return council.topics?.some(topic => {
+        if (!topic.schedule?.time_start) return false;
+        const scheduleDate = formatTimestamp(topic.schedule.time_start);
+        return scheduleDate.toDateString() === date.toDateString();
+      });
     });
   };
 
@@ -58,20 +65,24 @@ export function CouncilCalendar({
           <div className={`text-sm font-medium mb-1 ${isToday ? "text-blue-600" : ""}`}>
             {day}
           </div>
-          {dayCouncils.map((council) => (
-            <div
-              key={council.id}
-              className="text-xs p-1 mb-1 rounded bg-primary/10 text-primary truncate cursor-pointer hover:bg-primary/20"
-              title={council.title}
-            >
-              {council.time_start &&
-                formatTimestamp(council.time_start).toLocaleTimeString("vi-VN", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}{" "}
-              - {council.title}
-            </div>
-          ))}
+          {dayCouncils.map((council) => {
+            // Get first topic's schedule time for display
+            const firstSchedule = council.topics?.find(t => t.schedule?.time_start)?.schedule;
+            return (
+              <div
+                key={council.id}
+                className="text-xs p-1 mb-1 rounded bg-primary/10 text-primary truncate cursor-pointer hover:bg-primary/20"
+                title={council.title}
+              >
+                {firstSchedule?.time_start &&
+                  formatTimestamp(firstSchedule.time_start).toLocaleTimeString("vi-VN", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}{" "}
+                - {council.title}
+              </div>
+            );
+          })}
         </div>
       );
     }
@@ -94,6 +105,11 @@ export function CouncilCalendar({
           Tháng {currentDate.getMonth() + 1} / {currentDate.getFullYear()}
         </h2>
         <div className="flex gap-2">
+          {canCreateSchedule && onCreateSchedule && (
+            <Button size="sm" onClick={onCreateSchedule}>
+              Tạo lịch hội đồng
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={previousMonth}>
             <ChevronLeft className="w-4 h-4" />
           </Button>

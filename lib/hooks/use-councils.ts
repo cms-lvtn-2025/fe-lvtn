@@ -2,10 +2,10 @@ import { useState, useEffect } from "react";
 import { collection, query, where, getDocs, doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { COLLECTIONS } from "@/lib/firebase/firestore";
-import type { Council, Topic, Defence, Teacher, Enrollment, Grade_defences } from "@/types/database";
+import type { Council, Topic, Defence, Teacher, Enrollment, Grade_defences, councils_schedule } from "@/types/database";
 
 export interface CouncilWithDetails extends Council {
-  topic?: Topic | null;
+  topics?: Array<Topic & { schedule?: councils_schedule }>;
   defences?: Array<Defence & { teacher?: Teacher | null }>;
   enrollments?: Array<Enrollment & { student?: any; gradeDefence?: Grade_defences | null }>;
   userPosition?: string;
@@ -22,15 +22,6 @@ export function useCouncils({ profile, userRoles }: UseCouncilsProps) {
   const [selectedCouncil, setSelectedCouncil] = useState<CouncilWithDetails | null>(null);
   const [gradingStudents, setGradingStudents] = useState<{[key: string]: number}>({});
 
-  // Assign topic states
-  const [showAssignTopic, setShowAssignTopic] = useState<string | null>(null);
-  const [availableTopics, setAvailableTopics] = useState<Topic[]>([]);
-  const [assignLoading, setAssignLoading] = useState(false);
-
-  // Permissions
-  const canAssignTopic = userRoles.includes("Academic_affairs_staff") || userRoles.includes("Department_Lecturer");
-  const canGrade = !canAssignTopic;
-
   const formatTimestamp = (timestamp: any) => {
     if (!timestamp) return new Date();
     if (timestamp.toDate) return timestamp.toDate();
@@ -44,65 +35,91 @@ export function useCouncils({ profile, userRoles }: UseCouncilsProps) {
     try {
       setLoading(true);
 
-      const councilsRef = collection(db, COLLECTIONS.COUNCILS);
-      let allCouncils: Council[] = [];
-
-      // Permission-based council loading
-      if (userRoles.includes("Academic_affairs_staff")) {
-        const councilsSnapshot = await getDocs(
-          query(councilsRef, where("semester_code", "==", profile.semester_code))
-        );
-        allCouncils = councilsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Council));
-      } else if (userRoles.includes("Department_Lecturer")) {
-        const councilsSnapshot = await getDocs(
-          query(
-            councilsRef,
-            where("major_code", "==", profile.major_code),
-            where("semester_code", "==", profile.semester_code)
-          )
-        );
-        allCouncils = councilsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Council));
-      } else {
-        const defencesRef = collection(db, COLLECTIONS.DEFENCES);
-        const defencesQuery = query(
-          defencesRef,
-          where("teacher_code", "==", profile.id)
-        );
-        const defencesSnapshot = await getDocs(defencesQuery);
-        const councilIds = Array.from(
-          new Set(defencesSnapshot.docs.map((doc) => doc.data().council_code))
-        );
-
-        if (councilIds.length === 0) {
-          setCouncils([]);
-          setLoading(false);
-          return;
-        }
-
-        const councilsSnapshot = await getDocs(councilsRef);
-        allCouncils = councilsSnapshot.docs
-          .filter((doc) => councilIds.includes(doc.id))
-          .map((doc) => ({ id: doc.id, ...doc.data() } as Council));
+      // Start from councils_schedule (only show councils with assigned topics)
+      const schedulesRef = collection(db, COLLECTIONS.COUNCILS_SCHEDULE);
+      const schedulesSnapshot = await getDocs(schedulesRef);
+      const allSchedules = schedulesSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as councils_schedule));
+      console.log(allSchedules)
+      if (allSchedules.length === 0) {
+        setCouncils([]);
+        setLoading(false);
+        return;
       }
 
-      // Get topics
-      const topicIds = allCouncils.map((c) => c.topic_code).filter(Boolean);
+      // Get unique council IDs from schedules
+      const councilIdsFromSchedules = Array.from(new Set(allSchedules.map(s => s.councils_code).filter(Boolean)));
+
+      // Load all councils
+      const councilsRef = collection(db, COLLECTIONS.COUNCILS);
+      const councilsSnapshot = await getDocs(councilsRef);
+      const allCouncilsMap = new Map<string, Council>();
+      councilsSnapshot.docs
+        .filter(doc => councilIdsFromSchedules.includes(doc.id))
+        .forEach(doc => {
+          allCouncilsMap.set(doc.id, { id: doc.id, ...doc.data() } as Council);
+        });
+
+      console.log(allCouncilsMap)
+      // Load defences
+      const defencesRef = collection(db, COLLECTIONS.DEFENCES);
+      const defencesSnapshot = await getDocs(defencesRef);
+      const allDefences = defencesSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Defence));
+
+      // Filter councils based on user roles
+      const councilsSet = new Map<string, Council>();
+
+      if (userRoles.includes("Academic_affairs_staff")) {
+        // Academic staff sees all councils in semester
+        allCouncilsMap.forEach((council, id) => {
+          if (council.semester_code === profile.semester_code) {
+            councilsSet.set(id, council);
+          }
+        });
+      }
+
+      if (userRoles.includes("Department_Lecturer")) {
+        // Department lecturer sees councils for their major
+        allCouncilsMap.forEach((council, id) => {
+          if (council.major_code === profile.major_code && council.semester_code === profile.semester_code) {
+            councilsSet.set(id, council);
+          }
+        });
+      }
+
+      // Add councils where user is a member
+      const userDefences = allDefences.filter(d => d.teacher_code === profile.id);
+      userDefences.forEach(defence => {
+        const council = allCouncilsMap.get(defence.council_code);
+        if (council) {
+          councilsSet.set(defence.council_code, council);
+        }
+      });
+
+      const allCouncils = Array.from(councilsSet.values());
+
+      if (allCouncils.length === 0) {
+        setCouncils([]);
+        setLoading(false);
+        return;
+      }
+
+      // Filter schedules for these councils only
+      const councilIds = allCouncils.map(c => c.id);
+      const filteredSchedules = allSchedules.filter(s => councilIds.includes(s.councils_code || ''));
+
+      // Get topics from schedules
+      const topicIds = filteredSchedules.map((s) => s.topic_code).filter(Boolean);
       const topicsRef = collection(db, COLLECTIONS.TOPICS);
       const topicsSnapshot = await getDocs(topicsRef);
       const allTopics = topicsSnapshot.docs
         .filter((doc) => topicIds.includes(doc.id))
         .map((doc) => ({ id: doc.id, ...doc.data() } as Topic));
 
-      // Get all defences for these councils
-      const councilIds = allCouncils.map(c => c.id);
-      const defencesRef = collection(db, COLLECTIONS.DEFENCES);
-      const allDefencesSnapshot = await getDocs(defencesRef);
-      const allDefences = allDefencesSnapshot.docs
-        .filter((doc) => councilIds.includes(doc.data().council_code))
-        .map((doc) => ({ id: doc.id, ...doc.data() } as Defence));
+      // Filter defences for these councils only
+      const councilDefences = allDefences.filter((d) => councilIds.includes(d.council_code));
 
       // Get teachers
-      const teacherIds = allDefences.map((d) => d.teacher_code).filter(Boolean);
+      const teacherIds = councilDefences.map((d) => d.teacher_code).filter(Boolean);
       const teachersRef = collection(db, COLLECTIONS.TEACHERS);
       const teachersSnapshot = await getDocs(teachersRef);
       const allTeachers = teachersSnapshot.docs
@@ -132,21 +149,28 @@ export function useCouncils({ profile, userRoles }: UseCouncilsProps) {
 
       // Map councils with details
       const councilsWithDetails = await Promise.all(allCouncils.map(async (council) => {
-        const topic = allTopics.find((t) => t.id === council.topic_code) || null;
-        const councilDefences = allDefences
+        // Get topics for this council from schedules
+        const councilSchedules = filteredSchedules.filter(s => s.councils_code === council.id);
+        const councilTopics = councilSchedules.map(schedule => {
+          const topic = allTopics.find(t => t.id === schedule.topic_code);
+          return topic ? { ...topic, schedule } : null;
+        }).filter(Boolean);
+
+        const defences = councilDefences
           .filter((d) => d.council_code === council.id)
           .map((defence) => ({
             ...defence,
             teacher: allTeachers.find((t) => t.id === defence.teacher_code) || null,
           }));
 
-        const userDefence = councilDefences.find(d => d.teacher_code === profile.id);
+        const userDefence = defences.find(d => d.teacher_code === profile.id);
         const userPosition = userDefence?.position || "";
 
-        const enrollments = topic ? topicEnrollments.filter(e => {
+        // Get all enrollments for all topics in this council
+        const enrollments = topicEnrollments.filter(e => {
           const enrollmentTopic = allTopics.find(t => t.enrollment_code === e.id);
-          return enrollmentTopic?.id === topic.id;
-        }) : [];
+          return councilTopics.some(ct => ct?.id === enrollmentTopic?.id);
+        });
 
         const enrollmentsWithGrades = await Promise.all(enrollments.map(async (enrollment) => {
           const student = allStudents.find(s => s.id === enrollment.student_code);
@@ -168,17 +192,21 @@ export function useCouncils({ profile, userRoles }: UseCouncilsProps) {
 
         return {
           ...council,
-          topic,
-          defences: councilDefences,
+          topics: councilTopics as Array<Topic & { schedule?: councils_schedule }>,
+          defences,
           userPosition,
           enrollments: enrollmentsWithGrades,
         };
       }));
 
-      // Sort by date
+      // Sort by date (use earliest schedule time)
       councilsWithDetails.sort((a, b) => {
-        const aDate = a.time_start ? formatTimestamp(a.time_start).getTime() : 0;
-        const bDate = b.time_start ? formatTimestamp(b.time_start).getTime() : 0;
+        const aDate = a.topics?.[0]?.schedule?.time_start
+          ? formatTimestamp(a.topics[0].schedule.time_start).getTime()
+          : 0;
+        const bDate = b.topics?.[0]?.schedule?.time_start
+          ? formatTimestamp(b.topics[0].schedule.time_start).getTime()
+          : 0;
         return aDate - bDate;
       });
 
@@ -187,45 +215,6 @@ export function useCouncils({ profile, userRoles }: UseCouncilsProps) {
       console.error("Error loading councils:", error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleShowAssignTopic = async (councilId: string, majorCode: string) => {
-    setShowAssignTopic(councilId);
-    setAssignLoading(true);
-
-    try {
-      const topicsRef = collection(db, COLLECTIONS.TOPICS);
-      const q = query(
-        topicsRef,
-        where("major_code", "==", majorCode),
-        where("semester_code", "==", profile?.semester_code),
-        where("status", "==", "completed")
-      );
-      const snapshot = await getDocs(q);
-      const topics = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Topic));
-      setAvailableTopics(topics);
-    } catch (error) {
-      console.error("Error loading topics:", error);
-    } finally {
-      setAssignLoading(false);
-    }
-  };
-
-  const handleAssignTopic = async (councilId: string, topicId: string) => {
-    try {
-      await updateDoc(doc(db, COLLECTIONS.COUNCILS, councilId), {
-        topic_code: topicId,
-        updated_at: new Date(),
-        updated_by: profile?.id
-      });
-
-      alert("Đã gán đề tài vào hội đồng thành công!");
-      setShowAssignTopic(null);
-      loadCouncils();
-    } catch (error) {
-      console.error("Error assigning topic:", error);
-      alert("Có lỗi khi gán đề tài");
     }
   };
 
@@ -282,15 +271,7 @@ export function useCouncils({ profile, userRoles }: UseCouncilsProps) {
     setSelectedCouncil,
     gradingStudents,
     setGradingStudents,
-    showAssignTopic,
-    setShowAssignTopic,
-    availableTopics,
-    assignLoading,
-    canAssignTopic,
-    canGrade,
     formatTimestamp,
-    handleShowAssignTopic,
-    handleAssignTopic,
     handleGradeSubmit,
     loadCouncils,
   };
