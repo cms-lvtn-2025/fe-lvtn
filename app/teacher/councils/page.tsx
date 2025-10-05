@@ -3,14 +3,21 @@
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
-import { Calendar, Users } from "lucide-react";
+import { Calendar, Users, Plus } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/lib/contexts/auth-context";
 import { useCouncils } from "@/lib/hooks/use-councils";
 import { CouncilCard } from "@/components/councils/council-card";
 import { CouncilCalendar } from "@/components/councils/council-calendar";
 import { CouncilFilters } from "@/components/councils/council-filters";
+import { CreateScheduleModal } from "@/components/councils/create-schedule-modal";
+import { EditScheduleModal } from "@/components/councils/edit-schedule-modal";
+import { SelectCouncilModal } from "@/components/councils/select-council-modal";
 import { getPositionLabel, getPositionColor } from "@/lib/utils/council-utils";
+import type { CouncilWithDetails } from "@/lib/hooks/use-councils";
+import { doc, deleteDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase/config";
+import { COLLECTIONS } from "@/lib/firebase/firestore";
 
 export default function CouncilsPage() {
   const { profile, userRoles } = useAuth();
@@ -23,6 +30,7 @@ export default function CouncilsPage() {
     setGradingStudents,
     formatTimestamp,
     handleGradeSubmit,
+    loadCouncils,
   } = useCouncils({ profile, userRoles });
 
   const [showCalendar, setShowCalendar] = useState(false);
@@ -30,6 +38,22 @@ export default function CouncilsPage() {
   const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFilter, setDateFilter] = useState("");
+  const [showSelectCouncil, setShowSelectCouncil] = useState(false);
+  const [showCreateSchedule, setShowCreateSchedule] = useState<CouncilWithDetails | null>(null);
+  const [editingTopic, setEditingTopic] = useState<{topic: any, councilId: string} | null>(null);
+
+  const canCreateSchedule = userRoles.includes("Academic_affairs_staff") || userRoles.includes("Department_Lecturer");
+
+  const handleDeleteSchedule = async (scheduleId: string) => {
+    try {
+      await deleteDoc(doc(db, COLLECTIONS.COUNCILS_SCHEDULE, scheduleId));
+      alert("Đã xóa lịch thành công!");
+      loadCouncils();
+    } catch (err) {
+      console.error("Error deleting schedule:", err);
+      alert("Có lỗi khi xóa lịch");
+    }
+  };
 
   if (loading) {
     return (
@@ -53,7 +77,6 @@ export default function CouncilsPage() {
 
   const filteredCouncils = councils.filter(council => {
     if (dateFilter) {
-      // Check if any topic schedule matches the date filter
       const hasMatchingDate = council.topics?.some(topic => {
         if (!topic.schedule?.time_start) return false;
         const scheduleDate = formatTimestamp(topic.schedule.time_start).toISOString().split('T')[0];
@@ -85,13 +108,21 @@ export default function CouncilsPage() {
               Danh sách hội đồng bạn tham gia
             </p>
           </div>
-          <Button
-            onClick={() => setShowCalendar(!showCalendar)}
-            variant={showCalendar ? "default" : "outline"}
-          >
-            <Calendar className="w-4 h-4 mr-2" />
-            {showCalendar ? "Xem danh sách" : "Xem lịch"}
-          </Button>
+          <div className="flex gap-2">
+            {canCreateSchedule && (
+              <Button onClick={() => setShowSelectCouncil(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Tạo lịch hội đồng
+              </Button>
+            )}
+            <Button
+              onClick={() => setShowCalendar(!showCalendar)}
+              variant={showCalendar ? "default" : "outline"}
+            >
+              <Calendar className="w-4 h-4 mr-2" />
+              {showCalendar ? "Xem danh sách" : "Xem lịch"}
+            </Button>
+          </div>
         </div>
 
         {!showCalendar && (
@@ -126,6 +157,7 @@ export default function CouncilsPage() {
                     key={council.id}
                     council={council}
                     profile={profile}
+                    userRoles={userRoles}
                     selectedCouncil={selectedCouncil}
                     setSelectedCouncil={setSelectedCouncil}
                     gradingStudents={gradingStudents}
@@ -134,11 +166,48 @@ export default function CouncilsPage() {
                     handleGradeSubmit={handleGradeSubmit}
                     getPositionLabel={getPositionLabel}
                     getPositionColor={getPositionColor}
+                    onDeleteSchedule={handleDeleteSchedule}
+                    onEditSchedule={(topic) => setEditingTopic({ topic, councilId: council.id })}
                   />
                 ))}
               </div>
             )}
           </>
+        )}
+
+        {showSelectCouncil && (
+          <SelectCouncilModal
+            councils={councils}
+            onSelect={(council) => {
+              setShowSelectCouncil(false);
+              setShowCreateSchedule(council);
+            }}
+            onClose={() => setShowSelectCouncil(false)}
+          />
+        )}
+
+        {showCreateSchedule && (
+          <CreateScheduleModal
+            council={showCreateSchedule}
+            userRoles={userRoles}
+            profile={profile}
+            onClose={() => setShowCreateSchedule(null)}
+            onSuccess={() => {
+              loadCouncils();
+            }}
+          />
+        )}
+
+        {editingTopic && (
+          <EditScheduleModal
+            topic={editingTopic.topic}
+            councilId={editingTopic.councilId}
+            onClose={() => setEditingTopic(null)}
+            onSuccess={() => {
+              loadCouncils();
+              setEditingTopic(null);
+            }}
+          />
         )}
       </div>
     </DashboardLayout>

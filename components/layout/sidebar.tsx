@@ -4,7 +4,7 @@ import React from "react"
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { GraduationCap, LayoutDashboard, FileText, Users, Calendar, Settings, LogOut, CheckCircle } from "lucide-react"
+import { GraduationCap, LayoutDashboard, FileText, Users, Calendar, Settings, LogOut, CheckCircle, BookOpen } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/lib/contexts/auth-context"
@@ -41,6 +41,7 @@ const roleMenuItems: Record<string, NavItem[]> = {
     { title: "Chấm điểm phản biện", href: "/teacher/reviewer/grading", icon: FileText },
   ],
   "Academic_affairs_staff": [
+    { title: "Quản lý học kỳ", href: "/teacher/semesters", icon: BookOpen },
     { title: "Tạo hội đồng", href: "/teacher/councils/create", icon: Users },
   ],
 }
@@ -59,7 +60,6 @@ export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const { profile, userRoles } = useAuth()
-  console.log(userRoles)
   // Merge navigation items based on all user roles
   const navItems = React.useMemo(() => {
     // If student or no roles, return student items

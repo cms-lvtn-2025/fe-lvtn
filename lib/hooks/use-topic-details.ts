@@ -68,7 +68,6 @@ export function useTopicDetails(studentId: string | undefined, currentSemesterId
   const [topics, setTopics] = useState<TopicDetails[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
-  console.log(topics)
   useEffect(() => {
     async function fetchTopicDetails() {
       if (!studentId || !currentSemesterId) {
@@ -96,7 +95,6 @@ export function useTopicDetails(studentId: string | undefined, currentSemesterId
 
         // 3. Tìm tất cả topics thuộc về student (match với enrollments)
         const studentTopicsWithEnrollments: Array<{ topic: Topic; enrollment: any }> = []
-        console.log(enrollments)
         for (const enrollment of enrollments) {
           const foundTopic = semesterTopics.find((t) => t.enrollment_code === enrollment.id)
           if (foundTopic) {

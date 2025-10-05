@@ -6,13 +6,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { getDocument, updateDocument, getPaginatedDocuments } from "@/lib/firebase/crud"
-import { collection, query, where, orderBy, limit, startAfter, DocumentSnapshot, getDocs } from "firebase/firestore"
+import { getPaginatedDocuments } from "@/lib/firebase/crud"
+import { collection, query, where, orderBy, limit, startAfter, DocumentSnapshot, getDocs, getDoc, doc, updateDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase/config"
+import { COLLECTIONS } from "@/lib/firebase/firestore"
 import { CheckCircle, XCircle, Search, ChevronLeft, ChevronRight, Users, AlertCircle } from "lucide-react"
 import { useAuth } from "@/lib/contexts/auth-context"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
+import { DashboardLayout } from "@/components/layout/dashboard-layout"
 
 interface Topic {
   id: string
@@ -91,7 +93,7 @@ export default function DepartmentApproveTopicsPage() {
       // Load supervisor info
       const topicsWithSupervisor = await Promise.all(
         topicsData.map(async (topic) => {
-          const supervisorDoc = await getDocument("profiles", topic.teacher_supervisor_code)
+          const supervisorDoc = await getDoc(doc(db, COLLECTIONS.TEACHERS, topic.teacher_supervisor_code))
           const supervisor = supervisorDoc.exists() ? supervisorDoc.data() : null
 
           // Load enrollments
@@ -99,10 +101,10 @@ export default function DepartmentApproveTopicsPage() {
           const students: any[] = []
 
           for (const enrollmentId of enrollmentIds) {
-            const enrollmentDoc = await getDocument("enrollments", enrollmentId)
+            const enrollmentDoc = await getDoc(doc(db, COLLECTIONS.ENROLLMENTS, enrollmentId))
             if (enrollmentDoc.exists()) {
               const enrollment = enrollmentDoc.data()
-              const studentDoc = await getDocument("profiles", enrollment.student_code)
+              const studentDoc = await getDoc(doc(db, COLLECTIONS.STUDENTS, enrollment.student_code))
               if (studentDoc.exists()) {
                 students.push({
                   id: studentDoc.id,
@@ -162,10 +164,11 @@ export default function DepartmentApproveTopicsPage() {
 
   const handleApprove = async (topicId: string) => {
     try {
-      await updateDocument("topics", topicId, {
+      await updateDoc(doc(db, COLLECTIONS.TOPICS, topicId), {
         status: "approved",
         approved_at: new Date(),
-        approved_by: profile.id
+        approved_by: profile?.id,
+        updated_at: new Date()
       })
 
       // Refresh
@@ -184,11 +187,12 @@ export default function DepartmentApproveTopicsPage() {
     }
 
     try {
-      await updateDocument("topics", topicId, {
+      await updateDoc(doc(db, COLLECTIONS.TOPICS, topicId), {
         status: "rejected",
         rejected_at: new Date(),
-        rejected_by: profile.id,
-        reject_reason: rejectReason[topicId]
+        rejected_by: profile?.id,
+        reject_reason: rejectReason[topicId],
+        updated_at: new Date()
       })
 
       // Reset form
@@ -217,19 +221,22 @@ export default function DepartmentApproveTopicsPage() {
 
   if (!profile || !userRoles.includes("Department_Lecturer")) {
     return (
-      <div className="container mx-auto py-6">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Bạn không có quyền truy cập trang này
-          </AlertDescription>
-        </Alert>
-      </div>
+      <DashboardLayout>
+        <div className="p-8">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Bạn không có quyền truy cập trang này
+            </AlertDescription>
+          </Alert>
+        </div>
+      </DashboardLayout>
     )
   }
 
   return (
-    <div className="container mx-auto py-6">
+    <DashboardLayout>
+      <div className="p-8">
       <div className="mb-6">
         <h1 className="text-3xl font-bold">Duyệt đề tài - Giáo viên bộ môn</h1>
         <p className="text-muted-foreground">
@@ -415,6 +422,7 @@ export default function DepartmentApproveTopicsPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </DashboardLayout>
   )
 }

@@ -39,7 +39,6 @@ export function useCouncils({ profile, userRoles }: UseCouncilsProps) {
       const schedulesRef = collection(db, COLLECTIONS.COUNCILS_SCHEDULE);
       const schedulesSnapshot = await getDocs(schedulesRef);
       const allSchedules = schedulesSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as councils_schedule));
-      console.log(allSchedules)
       if (allSchedules.length === 0) {
         setCouncils([]);
         setLoading(false);
@@ -59,7 +58,6 @@ export function useCouncils({ profile, userRoles }: UseCouncilsProps) {
           allCouncilsMap.set(doc.id, { id: doc.id, ...doc.data() } as Council);
         });
 
-      console.log(allCouncilsMap)
       // Load defences
       const defencesRef = collection(db, COLLECTIONS.DEFENCES);
       const defencesSnapshot = await getDocs(defencesRef);

@@ -4,9 +4,10 @@ import type React from "react"
 
 import { createContext, useContext, useEffect, useState } from "react"
 import type { User } from "firebase/auth"
-import { onAuthChange, getUserProfile, type UserProfile } from "@/lib/firebase/auth"
+import { onAuthChange, getUserProfile, type UserProfile, getUserProfileByEmailAndSemester } from "@/lib/firebase/auth"
 import { collection, query, where, getDocs } from "firebase/firestore"
 import { db } from "@/lib/firebase/config"
+import { useSemester } from "./semester-context"
 
 interface AuthContextType {
   user: User | null
@@ -29,14 +30,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [userRoles, setUserRoles] = useState<string[]>([])
-
   useEffect(() => {
     const unsubscribe = onAuthChange(async (user) => {
       setUser(user)
-
-      if (user) {
+      console.log(user)
+      const semester = localStorage.getItem("currentSemesterId")
+      if (user && user.email && semester) {
         // Try to get profile from both collections
-        let userProfile = await getUserProfile(user.uid, "teacher")
+        let userProfile = await getUserProfileByEmailAndSemester(user.email, semester, "teacher")
         if (!userProfile) {
           userProfile = await getUserProfile(user.uid, "student")
         }
@@ -50,10 +51,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             where("semester_code", "==", userProfile.semester_code),
             where("activate", "==", true)
           )
-          console.log(userProfile.id, userProfile.semester_code)
           const rolesSnapshot = await getDocs(rolesQuery)
           const roles = rolesSnapshot.docs.map(doc => doc.data().role)
-          console.log("cc", roles)
           setUserRoles(roles)
         }
       } else {
@@ -104,7 +103,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         )
         const rolesSnapshot = await getDocs(rolesQuery)
         const roles = rolesSnapshot.docs.map(doc => doc.data().role)
-        console.log("ccc", roles)
         setUserRoles(roles)
       } else {
         // No profile found for this semester, keep current profile but update semester_code

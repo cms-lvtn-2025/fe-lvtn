@@ -8,12 +8,13 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { useState, useEffect } from "react"
 import { useAuth } from "@/lib/contexts/auth-context"
-import { collection, query, where, getDocs, addDoc } from "firebase/firestore"
+import { collection, query, where, getDocs, addDoc, doc, updateDoc, deleteDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase/config"
 import { COLLECTIONS } from "@/lib/firebase/firestore"
-import { ChevronLeft, ChevronRight, CheckCircle } from "lucide-react"
+import { ChevronLeft, ChevronRight, CheckCircle, Edit2, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import type { Council, Defence } from "@/types/database"
 
 interface Teacher {
   id: string
@@ -37,6 +38,10 @@ interface DefenceMember {
   teacher?: Teacher
 }
 
+interface CouncilWithDefences extends Council {
+  defences?: (Defence & { teacher?: Teacher })[]
+}
+
 export default function CreateCouncilPage() {
   const { profile, userRoles } = useAuth()
   const router = useRouter()
@@ -51,6 +56,10 @@ export default function CreateCouncilPage() {
   // Step 2-5: Select teachers for each position
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const [defenceMembers, setDefenceMembers] = useState<DefenceMember[]>([])
+
+  // Council list
+  const [councils, setCouncils] = useState<CouncilWithDefences[]>([])
+  const [editingCouncil, setEditingCouncil] = useState<CouncilWithDefences | null>(null)
 
   const positions: DefensePosition[] = ["president", "secretary", "reviewer", "member"]
   const positionLabels = {
@@ -67,6 +76,7 @@ export default function CreateCouncilPage() {
   useEffect(() => {
     if (profile) {
       loadMajors()
+      loadCouncils()
       if (userRoles.includes("Department_Lecturer")) {
         setMajorCode(profile.major_code)
       }
@@ -116,6 +126,56 @@ export default function CreateCouncilPage() {
     }
   }
 
+  const loadCouncils = async () => {
+    if (!profile) return
+
+    try {
+      const councilsRef = collection(db, COLLECTIONS.COUNCILS)
+      let q = query(councilsRef, where("semester_code", "==", profile.semester_code))
+
+      // Filter by major for Department_Lecturer
+      if (userRoles.includes("Department_Lecturer") && !userRoles.includes("Academic_affairs_staff")) {
+        q = query(q, where("major_code", "==", profile.major_code))
+      }
+
+      const snapshot = await getDocs(q)
+      const councilsData = await Promise.all(
+        snapshot.docs.map(async (councilDoc) => {
+          const councilData = { id: councilDoc.id, ...councilDoc.data() } as Council
+
+          // Load defences
+          const defencesRef = collection(db, COLLECTIONS.DEFENCES)
+          const defencesQuery = query(defencesRef, where("council_code", "==", councilDoc.id))
+          const defencesSnapshot = await getDocs(defencesQuery)
+
+          const defences = await Promise.all(
+            defencesSnapshot.docs.map(async (defenceDoc) => {
+              const defenceData = { id: defenceDoc.id, ...defenceDoc.data() } as Defence
+
+              // Load teacher
+              if (defenceData.teacher_code) {
+                const teachersRef = collection(db, COLLECTIONS.TEACHERS)
+                const teachersQuery = query(teachersRef, where("__name__", "==", defenceData.teacher_code))
+                const teachersSnapshot = await getDocs(teachersQuery)
+                if (!teachersSnapshot.empty) {
+                  const teacherData = { id: teachersSnapshot.docs[0].id, ...teachersSnapshot.docs[0].data() } as Teacher
+                  return { ...defenceData, teacher: teacherData }
+                }
+              }
+              return defenceData
+            })
+          )
+
+          return { ...councilData, defences }
+        })
+      )
+
+      setCouncils(councilsData)
+    } catch (error) {
+      console.error("Error loading councils:", error)
+    }
+  }
+
   const getCurrentPosition = (): DefensePosition | null => {
     const positionIndex = step - 2 // step 2 = president (index 0)
     return positions[positionIndex] || null
@@ -151,7 +211,6 @@ export default function CreateCouncilPage() {
   }
 
   const handleCreateCouncil = async () => {
-
     if (defenceMembers.length < 2) {
       alert("Hội đồng phải có ít nhất Chủ tịch và Thư ký")
       return
@@ -160,37 +219,121 @@ export default function CreateCouncilPage() {
     try {
       setLoading(true)
 
-      // Create council without topic
-      const councilData = {
-        title: councilTitle,
-        major_code: majorCode,
-        semester_code: profile?.semester_code,
-        created_at: new Date(),
-        updated_at: new Date(),
-        created_by: profile?.id,
-        updated_by: profile?.id
-      }
-
-      const councilRef = await addDoc(collection(db, COLLECTIONS.COUNCILS), councilData)
-
-      // Create defences for each member
-      for (const member of defenceMembers) {
-        await addDoc(collection(db, COLLECTIONS.DEFENCES), {
-          title: `${positionLabels[member.position]} - ${councilTitle}`,
-          council_code: councilRef.id,
-          teacher_code: member.teacher_code,
-          position: member.position
+      if (editingCouncil) {
+        // Update existing council
+        await updateDoc(doc(db, COLLECTIONS.COUNCILS, editingCouncil.id!), {
+          title: councilTitle,
+          major_code: majorCode,
+          updated_at: new Date(),
+          updated_by: profile?.id
         })
+
+        // Delete old defences
+        const oldDefencesRef = collection(db, COLLECTIONS.DEFENCES)
+        const oldDefencesQuery = query(oldDefencesRef, where("council_code", "==", editingCouncil.id))
+        const oldDefencesSnapshot = await getDocs(oldDefencesQuery)
+        for (const defenceDoc of oldDefencesSnapshot.docs) {
+          await deleteDoc(defenceDoc.ref)
+        }
+
+        // Create new defences
+        for (const member of defenceMembers) {
+          await addDoc(collection(db, COLLECTIONS.DEFENCES), {
+            title: `${positionLabels[member.position]} - ${councilTitle}`,
+            council_code: editingCouncil.id,
+            teacher_code: member.teacher_code,
+            position: member.position
+          })
+        }
+
+        alert("Cập nhật hội đồng thành công!")
+      } else {
+        // Create new council
+        const councilData = {
+          title: councilTitle,
+          major_code: majorCode,
+          semester_code: profile?.semester_code,
+          created_at: new Date(),
+          updated_at: new Date(),
+          created_by: profile?.id,
+          updated_by: profile?.id
+        }
+
+        const councilRef = await addDoc(collection(db, COLLECTIONS.COUNCILS), councilData)
+
+        // Create defences for each member
+        for (const member of defenceMembers) {
+          await addDoc(collection(db, COLLECTIONS.DEFENCES), {
+            title: `${positionLabels[member.position]} - ${councilTitle}`,
+            council_code: councilRef.id,
+            teacher_code: member.teacher_code,
+            position: member.position
+          })
+        }
+
+        alert("Tạo hội đồng thành công!")
       }
 
-      alert("Tạo hội đồng thành công! Bây giờ bạn có thể gán hội đồng vào đề tài.")
-      router.push("/teacher/councils")
+      // Reset form
+      setCouncilTitle("")
+      setMajorCode(userRoles.includes("Department_Lecturer") ? profile?.major_code || "" : "")
+      setDefenceMembers([])
+      setEditingCouncil(null)
+      setStep(1)
+      loadCouncils()
     } catch (error) {
-      console.error("Error creating council:", error)
-      alert("Có lỗi khi tạo hội đồng")
+      console.error("Error creating/updating council:", error)
+      alert("Có lỗi khi tạo/cập nhật hội đồng")
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleEditCouncil = (council: CouncilWithDefences) => {
+    setEditingCouncil(council)
+    setCouncilTitle(council.title || "")
+    setMajorCode(council.major_code || "")
+
+    // Load defence members
+    const members: DefenceMember[] = (council.defences || []).map(defence => ({
+      position: defence.position,
+      teacher_code: defence.teacher_code,
+      teacher: defence.teacher
+    }))
+    setDefenceMembers(members)
+    setStep(1)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleDeleteCouncil = async (councilId: string) => {
+    if (!confirm("Bạn có chắc muốn xóa hội đồng này?")) return
+
+    try {
+      // Delete defences first
+      const defencesRef = collection(db, COLLECTIONS.DEFENCES)
+      const defencesQuery = query(defencesRef, where("council_code", "==", councilId))
+      const defencesSnapshot = await getDocs(defencesQuery)
+      for (const defenceDoc of defencesSnapshot.docs) {
+        await deleteDoc(defenceDoc.ref)
+      }
+
+      // Delete council
+      await deleteDoc(doc(db, COLLECTIONS.COUNCILS, councilId))
+
+      alert("Đã xóa hội đồng thành công!")
+      loadCouncils()
+    } catch (error) {
+      console.error("Error deleting council:", error)
+      alert("Có lỗi khi xóa hội đồng")
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditingCouncil(null)
+    setCouncilTitle("")
+    setMajorCode(userRoles.includes("Department_Lecturer") ? profile?.major_code || "" : "")
+    setDefenceMembers([])
+    setStep(1)
   }
 
   if (!canCreateCouncil) {
@@ -215,11 +358,22 @@ export default function CreateCouncilPage() {
     <DashboardLayout>
       <div className="p-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Tạo hội đồng bảo vệ</h1>
+          <h1 className="text-3xl font-bold mb-2">Quản lý hội đồng bảo vệ</h1>
           <p className="text-muted-foreground">
-            Tạo hội đồng trước, sau đó gán vào đề tài
+            Tạo và quản lý hội đồng, sau đó gán vào đề tài
           </p>
         </div>
+
+        {editingCouncil && (
+          <Alert className="mb-6">
+            <AlertDescription className="flex items-center justify-between">
+              <span>Đang chỉnh sửa hội đồng: <strong>{editingCouncil.title}</strong></span>
+              <Button variant="ghost" size="sm" onClick={handleCancelEdit}>
+                Hủy chỉnh sửa
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Progress Steps */}
         <div className="mb-8">
@@ -267,7 +421,6 @@ export default function CreateCouncilPage() {
                     <select
                       value={majorCode}
                       onChange={(e) => {
-                        console.log(e.target)
                         setMajorCode(e.target.value)
                       }}
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -384,12 +537,74 @@ export default function CreateCouncilPage() {
                   disabled={loading}
                 >
                   <CheckCircle className="w-4 h-4 mr-2" />
-                  {loading ? "Đang tạo..." : "Tạo hội đồng"}
+                  {loading ? (editingCouncil ? "Đang cập nhật..." : "Đang tạo...") : (editingCouncil ? "Cập nhật hội đồng" : "Tạo hội đồng")}
                 </Button>
               )}
             </div>
           </CardContent>
         </Card>
+
+        {/* Councils List */}
+        <div className="mt-8">
+          <h2 className="text-2xl font-bold mb-4">Danh sách hội đồng</h2>
+          <div className="grid gap-4">
+            {councils.length === 0 ? (
+              <Card className="p-6">
+                <p className="text-center text-muted-foreground">Chưa có hội đồng nào</p>
+              </Card>
+            ) : (
+              councils.map((council) => (
+                <Card key={council.id} className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h3 className="text-xl font-semibold mb-2">{council.title}</h3>
+                      <div className="flex items-center gap-2 mb-4">
+                        <Badge variant="outline">
+                          {majors.find(m => m.id === council.major_code)?.title || council.major_code}
+                        </Badge>
+                      </div>
+
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-muted-foreground">Thành viên:</p>
+                        {council.defences && council.defences.length > 0 ? (
+                          <div className="grid gap-2">
+                            {council.defences.map((defence) => (
+                              <div key={defence.id} className="flex items-center gap-2 text-sm">
+                                <Badge className="min-w-[100px]">{positionLabels[defence.position]}</Badge>
+                                <span>{defence.teacher?.username || "N/A"}</span>
+                                <span className="text-muted-foreground">({defence.teacher?.email})</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">Chưa có thành viên</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 ml-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEditCouncil(council)}
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDeleteCouncil(council.id!)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))
+            )}
+          </div>
+        </div>
       </div>
     </DashboardLayout>
   )

@@ -37,7 +37,6 @@ export async function signIn(email: string, password: string, role: UserRole) {
       await firebaseSignOut(auth)
       throw new Error(`Tài khoản không tồn tại trong hệ thống ${role === "teacher" ? "giáo viên" : "sinh viên"}`)
     }
-    console.log("cccc", user)
     return {
       user,
       profile: { id: user.uid, ...userDoc.data(), role: role } as UserProfile,
@@ -80,6 +79,34 @@ export async function getUserProfile(userId: string, role: UserRole): Promise<Us
     return null
   } catch (error) {
     console.error("Error fetching user profile:", error)
+    return null
+  }
+}
+
+// Get user profile by email and semester
+export async function getUserProfileByEmailAndSemester(
+  email: string,
+  semester_code: string,
+  role: UserRole
+): Promise<UserProfile | null> {
+  try {
+    const collectionName = role === "teacher" ? "teachers" : "students"
+    const q = query(
+      collection(db, collectionName),
+      where("email", "==", email),
+      where("semester_code", "==", semester_code)
+    )
+
+    const snapshot = await getDocs(q)
+
+    if (!snapshot.empty) {
+      const userDoc = snapshot.docs[0]
+      return { id: userDoc.id, role, ...userDoc.data() } as UserProfile
+    }
+
+    return null
+  } catch (error) {
+    console.error("Error fetching user profile by email and semester:", error)
     return null
   }
 }

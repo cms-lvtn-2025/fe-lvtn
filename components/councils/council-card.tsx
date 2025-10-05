@@ -2,13 +2,14 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Clock, FileText, Award } from "lucide-react";
+import { Clock, FileText, Award, Edit2, Trash2 } from "lucide-react";
 import type { CouncilWithDetails } from "@/lib/hooks/use-councils";
 import type { Grade_defences } from "@/types/database";
 
 interface CouncilCardProps {
   council: CouncilWithDetails;
   profile: any;
+  userRoles: string[];
   selectedCouncil: CouncilWithDetails | null;
   setSelectedCouncil: (council: CouncilWithDetails | null) => void;
   gradingStudents: {[key: string]: number};
@@ -17,11 +18,14 @@ interface CouncilCardProps {
   handleGradeSubmit: (enrollmentId: string, gradeCode: string | undefined, studentCode: string) => void;
   getPositionLabel: (position: string) => string;
   getPositionColor: (position: string) => string;
+  onDeleteSchedule?: (scheduleId: string) => void;
+  onEditSchedule?: (topic: any) => void;
 }
 
 export function CouncilCard({
   council,
   profile,
+  userRoles,
   selectedCouncil,
   setSelectedCouncil,
   gradingStudents,
@@ -30,7 +34,10 @@ export function CouncilCard({
   handleGradeSubmit,
   getPositionLabel,
   getPositionColor,
+  onDeleteSchedule,
+  onEditSchedule,
 }: CouncilCardProps) {
+  const canManageSchedule = userRoles.includes("Academic_affairs_staff") || userRoles.includes("Department_Lecturer");
   return (
     <Card className="p-6">
       <div className="flex items-start justify-between mb-4">
@@ -44,12 +51,38 @@ export function CouncilCard({
               <div className="space-y-2">
                 {council.topics.map((topic, index) => (
                   <div key={topic.id || index} className="border-l-2 border-primary pl-3">
-                    <div className="flex items-start gap-3 mb-2">
-                      <FileText className="w-5 h-5 text-muted-foreground mt-0.5" />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium mb-0.5">Đề tài:</p>
-                        <p className="text-sm text-muted-foreground">{topic.title}</p>
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="flex items-start gap-3 flex-1">
+                        <FileText className="w-5 h-5 text-muted-foreground mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium mb-0.5">Đề tài:</p>
+                          <p className="text-sm text-muted-foreground">{topic.title}</p>
+                        </div>
                       </div>
+                      {canManageSchedule && topic.schedule?.id && (
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0"
+                            onClick={() => onEditSchedule?.(topic)}
+                          >
+                            <Edit2 className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0 text-red-600 hover:text-red-700"
+                            onClick={() => {
+                              if (confirm("Bạn có chắc muốn xóa lịch này?")) {
+                                onDeleteSchedule?.(topic.schedule!.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                     {topic.schedule?.time_start && (
                       <div className="flex items-start gap-3 ml-8">

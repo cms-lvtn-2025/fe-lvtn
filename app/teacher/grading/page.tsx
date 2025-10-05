@@ -43,7 +43,7 @@ export default function GradingPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null)
-  const [pageCache, setPageCache] = useState<Map<number, { topics: TopicWithDetails[], lastDoc: DocumentSnapshot | null }>>(new Map())
+  // const [pageCache, setPageCache] = useState<Map<number, { topics: TopicWithDetails[], lastDoc: DocumentSnapshot | null }>>(new Map())
   const itemsPerPage = 5
 
   // Filter states
@@ -51,7 +51,7 @@ export default function GradingPage() {
   const [searchInput, setSearchInput] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
   const [searchField, setSearchField] = useState<"all" | "mssv" | "name" | "title">("all")
-
+  console.log("profile",profile?.id)
   // Grade data for midterm (whole topic)
   const [midtermData, setMidtermData] = useState({
     grade: "",
@@ -62,13 +62,14 @@ export default function GradingPage() {
   const [studentGrades, setStudentGrades] = useState<StudentGrade[]>([])
 
   useEffect(() => {
+    console.log("hehe")
     loadSupervisedTopics()
-  }, [profile, currentPage, searchTerm, searchField, filterType])
+  }, [profile?.id, currentPage, searchTerm, searchField, filterType])
 
   const handleSearch = () => {
     setSearchTerm(searchInput)
     setCurrentPage(1)
-    setPageCache(new Map())
+    // setPageCache(new Map())
   }
 
   const handleClearSearch = () => {
@@ -77,23 +78,26 @@ export default function GradingPage() {
     setSearchField("all")
     setFilterType("all")
     setCurrentPage(1)
-    setPageCache(new Map())
+    // setPageCache(new Map())
   }
 
   const loadSupervisedTopics = async () => {
-    if (!profile?.id) return
-
+    if (!profile?.id) {
+      
+      return
+    }
+    console.log("chay vao 2")
     try {
       setLoading(true)
 
       // Check cache first
-      const cached = pageCache.get(currentPage)
-      if (cached && !searchTerm && filterType === "all") {
-        setTopics(cached.topics)
-        setLastDoc(cached.lastDoc)
-        setLoading(false)
-        return
-      }
+      // const cached = pageCache.get(currentPage)
+      // if (cached && !searchTerm && filterType === "all") {
+      //   setTopics(cached.topics)
+      //   setLastDoc(cached.lastDoc)
+      //   setLoading(false)
+      //   return
+      // }
 
       // Build query
       const topicsRef = collection(db, COLLECTIONS.TOPICS)
@@ -101,6 +105,7 @@ export default function GradingPage() {
         where("teacher_supervisor_code", "==", profile.id),
         where("status", "==", "approved"),
       ]
+                  console.log("topic", -3)
 
       // Add search filter for title
       if (searchTerm && searchField === "title") {
@@ -116,20 +121,25 @@ export default function GradingPage() {
       if (currentPage > 1 && lastDoc) {
         constraints.push(startAfter(lastDoc))
       }
+                  console.log("topic", -2)
+
 
       constraints.push(limit(itemsPerPage))
+                  console.log("topic", -1)
 
       const q = query(topicsRef, ...constraints)
       const snapshot = await getDocs(q)
+                  console.log("topic", 0)
 
       const docs = snapshot.docs
       const newLastDoc = docs[docs.length - 1] || null
+            console.log("topic", 1)
 
       const supervisedTopics = docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       } as Topic))
-
+      console.log("topic", supervisedTopics)
       // Get total count (only on first load)
       if (currentPage === 1 && !searchTerm) {
         const countQuery = query(topicsRef,
@@ -229,12 +239,12 @@ export default function GradingPage() {
       setLastDoc(newLastDoc)
 
       // Cache the page
-      if (!searchTerm && filterType === "all") {
-        setPageCache(prev => new Map(prev).set(currentPage, {
-          topics: topicsWithDetails,
-          lastDoc: newLastDoc
-        }))
-      }
+      // if (!searchTerm && filterType === "all") {
+      //   setPageCache(prev => new Map(prev).set(currentPage, {
+      //     topics: topicsWithDetails,
+      //     lastDoc: newLastDoc
+      //   }))
+      // }
 
     } catch (error) {
       console.error("Error loading topics:", error)
@@ -383,7 +393,7 @@ export default function GradingPage() {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1)
-    setPageCache(new Map())
+    // setPageCache(new Map())
   }, [searchTerm, searchField, filterType])
 
   if (loading) {

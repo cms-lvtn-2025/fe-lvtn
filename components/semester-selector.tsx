@@ -14,6 +14,7 @@ import { Calendar, Check } from "lucide-react"
 
 export function SemesterSelector() {
   const { semesters, currentSemester, setCurrentSemester, isLoading } = useSemester()
+  console.log("cc", currentSemester)
   if (isLoading) {
     return (
       <Button variant="outline" size="sm" disabled>

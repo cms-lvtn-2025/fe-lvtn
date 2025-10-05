@@ -51,7 +51,7 @@ export function CreateScheduleModal({
           topicsRef,
           where("major_code", "==", council.major_code),
           where("semester_code", "==", profile.semester_code),
-          where("status", "==", "completed")
+          where("status", "==", "approved")
         );
       } else if (userRoles.includes("Department_Lecturer")) {
         // Department lecturer: only their major's completed topics
@@ -59,7 +59,7 @@ export function CreateScheduleModal({
           topicsRef,
           where("major_code", "==", profile.major_code),
           where("semester_code", "==", profile.semester_code),
-          where("status", "==", "completed")
+          where("status", "==", "approved")
         );
       } else {
         setTopics([]);
@@ -98,10 +98,10 @@ export function CreateScheduleModal({
 
       const existingStart = schedule.time_start instanceof Date
         ? schedule.time_start
-        : new Date(schedule.time_start.seconds * 1000);
+        : new Date((schedule.time_start as any).seconds * 1000);
       const existingEnd = schedule.time_end instanceof Date
         ? schedule.time_end
-        : new Date(schedule.time_end.seconds * 1000);
+        : new Date((schedule.time_end as any).seconds * 1000);
 
       // Check for time overlap
       if (
